@@ -15,7 +15,8 @@ Redis, FastAPI, and Streamlit run as lightweight companion services via Docker C
 |---|---|---|
 | Phase 1 | Complete | Data foundation: models, CSV/tick loaders, tick aggregation, contracts |
 | Phase 2 | Complete | Storage: Parquet + DuckDB |
-| Phase 3–9 | Planned | Indicators, macro regime, strategies, risk, broker, backtest, API |
+| Phase 3 | Complete | Technical indicators from first principles: EMA, RSI, ATR, OBV |
+| Phase 4–9 | Planned | Macro regime, strategies, risk, broker, backtest, API, dashboard |
 
 ---
 
@@ -141,6 +142,34 @@ file removes the data from both `ParquetStore` and `DuckDBStore`.
 
 ---
 
+## Technical Analysis Indicators
+
+The engine computes technical indicators from first principles using pure Python and NumPy. No black-box indicator libraries are used in the core trading engine.
+
+### Core Indicators
+
+| Indicator | Module | Measures | Formula / Recurrence |
+|---|---|---|---|
+| **EMA** | [`vega.indicators.ema`](vega/indicators/ema.py) | Trend-following momentum | $EMA_t = \alpha P_t + (1 - \alpha) EMA_{t-1}$, with $\alpha = \frac{2}{period + 1}$. Initialized via SMA of first `period` prices at index `period - 1`. |
+| **RSI** | [`vega.indicators.rsi`](vega/indicators/rsi.py) | Momentum & overbought/oversold levels | $RSI = 100 - \frac{100}{1 + RS}$, with Wilder-smoothed average gains and losses. Handles zero loss (100.0), zero gain (0.0), and flat prices (50.0). |
+| **ATR** | [`vega.indicators.atr`](vega/indicators/atr.py) | Market volatility & gap risk | $TR_t = \max(H_t - L_t, \|H_t - C_{t-1}\|, \|L_t - C_{t-1}\|)$ with $TR_0 = H_0 - L_0$. Smoothed via Wilder recursion: $ATR_t = \frac{ATR_{t-1}(N-1) + TR_t}{N}$. |
+| **OBV** | [`vega.indicators.obv`](vega/indicators/obv.py) | Cumulative volume flow | $OBV_t = OBV_{t-1} \pm V_t$ based on close comparison ($C_t > C_{t-1} \implies +V$, $C_t < C_{t-1} \implies -V$). Seeded at $OBV_0 = V_0$. |
+
+### Why Implement From First Principles?
+
+1. **Explainability in Interviews**: Every formula, seed convention, and recurrence relation is explicit and readable in 30 seconds.
+2. **Transparency on Edge Cases**: Black-box libraries often mask warmup periods, silently return NaNs, or use undocumented seed heuristics. Vega makes all warmup delays and flat-price conventions explicit.
+3. **No Framework Lock-in**: The core calculation logic operates on pure Python numeric sequences and `vega.data.models.Bar` objects, with zero reliance on Pandas Series metadata or TA-Lib C-extensions.
+
+### Independent Reference Validation (`pandas-ta`)
+
+[`validation/validate_indicators.py`](validation/validate_indicators.py) uses `pandas-ta` **only as an independent reference**:
+- **EMA & OBV**: Bit-identical matches against `pandas-ta` (`max_diff = 0.0`).
+- **RSI**: Bit-identical match from index 14 onwards (`max_diff < 1e-13`). `pandas-ta` seeds one bar earlier at index 13 by taking an initial mean over 13 differences (due to `diff()[0]` being NaN), whereas Vega strictly adheres to Wilder's 1978 textbook definition requiring 15 price points to form 14 price changes.
+- **ATR**: Evaluates True Range with $TR_0 = H_0 - L_0$ in the initial SMA seed. `pandas-ta` drops $TR_0$ as NaN, causing a minor seed difference (~0.018) that decays exponentially by $\frac{13}{14}$ per bar and converges to $< 0.001$ after warmup.
+
+---
+
 ## Configuration
 
 All tunable parameters are in [`config.yaml`](config.yaml).
@@ -171,16 +200,21 @@ No test reads from these CSV files.
 
 ---
 
-## Testing
+## Testing & Validation
 
 ```bash
-# Run all tests
-pytest -q
+# Run all unit and validation tests
+pytest -v
 
-# Run a specific test file
+# Run specific test suites
 pytest tests/test_tick_aggregation.py -v
 pytest tests/test_parquet_store.py -v
 pytest tests/test_duckdb_store.py -v
+pytest tests/test_indicators.py -v
+pytest tests/test_indicator_validation.py -v
+
+# Run standalone independent cross-validation against pandas-ta
+python validation/validate_indicators.py
 ```
 
 Tests are grouped by component. All use synthetic data — no CSV files,
