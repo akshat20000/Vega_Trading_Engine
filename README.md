@@ -1,1 +1,2 @@
-# Vega---Quant-Trading-Engine
+# Vega Trading Engine
+

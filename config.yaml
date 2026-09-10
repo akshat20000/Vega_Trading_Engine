@@ -1,0 +1,35 @@
+# Vega Quant Trading Engine — Configuration
+# All tunable parameters live here. No magic numbers anywhere in the codebase.
+# Loaded by vega/config.py at startup.
+
+backtest:
+  initial_capital: 1000000   # Starting capital in INR (10 lakhs)
+  symbol: "NIFTY50"
+
+costs:
+  slippage_pct: 0.001        # 0.1%  — applied to fill price at t+1 open
+  brokerage_pct: 0.0003      # 0.03% — deducted from each fill
+
+risk:
+  max_position_size: 10      # Maximum lots held at any time
+  max_pyramids: 3            # Maximum pyramid entries per grid epoch
+  daily_loss_limit: 50000    # INR — triggers kill switch if breached
+
+strategies:
+  atr_grid:
+    atr_period: 14
+    grid_multiplier: 1.5     # grid spacing = ATR × multiplier
+    position_cap: 5          # maximum lots from ATR Grid strategy alone
+  stop_and_reverse:
+    fast_ema: 9
+    slow_ema: 21
+    atr_period: 14
+
+macro:
+  vix_high_threshold: 20.0   # VIX above this → bearish signal
+  vix_low_threshold: 14.0    # VIX below this → bullish signal
+  usdinr_stress_level: 84.0  # USDINR above this → bearish signal
+
+walk_forward:
+  train_bars: 252             # ~1 trading year (used as training window)
+  test_bars: 63               # ~1 trading quarter (evaluated out-of-sample)

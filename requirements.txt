@@ -1,0 +1,22 @@
+# ── Core data processing ─────────────────────────────────────────────────────
+pandas>=2.0.0          # Bar/Tick data manipulation, indicator I/O
+numpy>=1.26.0          # Numerical math inside indicators
+pyarrow>=14.0.0        # Parquet read/write (Phase 2)
+pyyaml>=6.0.0          # Load config.yaml into VegaConfig
+
+# ── Storage ───────────────────────────────────────────────────────────────────
+duckdb>=0.10.0         # SQL queries over Parquet files (Phase 2)
+
+# ── API & Dashboard ───────────────────────────────────────────────────────────
+fastapi>=0.110.0       # REST API (Phase 9)
+uvicorn>=0.29.0        # ASGI server for FastAPI
+redis>=5.0.0           # Latest-state cache (Phase 9)
+streamlit>=1.32.0      # Internal dashboard (Phase 9)
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest>=8.0.0
+pytest-cov>=4.0.0      # Code coverage reports
+
+# ── Validation only (not used by core engine) ─────────────────────────────────
+# pandas-ta>=0.3.14b   # Indicator cross-check reference — uncomment when needed
+# vectorbt>=0.26.1     # Backtest cross-check reference — uncomment when needed
