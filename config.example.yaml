@@ -1,0 +1,52 @@
+# Vega Quant Trading Engine — Example Configuration
+#
+# INSTRUCTIONS:
+#   1. Copy this file to config.yaml (already present in the repo).
+#   2. Replace placeholder values with your actual settings.
+#   3. NEVER commit real API keys, passwords, or broker tokens to Git.
+#
+# config.yaml is committed because it contains only numeric parameters.
+# If you add secrets to config.yaml in the future, move them to a
+# config.local.yaml file (already in .gitignore) and load that separately.
+
+backtest:
+  initial_capital: 1000000   # Starting capital in INR (10 lakhs)
+  symbol: "NIFTY50"
+
+costs:
+  slippage_pct: 0.001        # 0.1% — applied to fill price at t+1 open
+  brokerage_pct: 0.0003      # 0.03% per trade
+
+risk:
+  max_position_size: 10
+  max_pyramids: 3
+  daily_loss_limit: 50000    # INR
+
+strategies:
+  atr_grid:
+    atr_period: 14
+    grid_multiplier: 1.5
+    position_cap: 5
+  stop_and_reverse:
+    fast_ema: 9
+    slow_ema: 21
+    atr_period: 14
+
+macro:
+  vix_high_threshold: 20.0
+  vix_low_threshold: 14.0
+  usdinr_stress_level: 84.0
+
+walk_forward:
+  train_bars: 252
+  test_bars: 63
+
+# ── Broker credentials (future use) ──────────────────────────────────────────
+# When adding a live broker, put credentials in config.local.yaml (ignored by
+# Git) and load it in your code. NEVER put real values here.
+#
+# broker:
+#   provider: "zerodha_kite"         # or "paper" for simulation
+#   api_key: "YOUR_KITE_API_KEY"     # replace — NEVER commit real key
+#   api_secret: "YOUR_KITE_SECRET"   # replace — NEVER commit real secret
+#   access_token: "YOUR_TOKEN"       # replace — NEVER commit real token

@@ -1,0 +1,146 @@
+# =============================================================================
+# Vega Quant Trading Engine — .gitignore
+# =============================================================================
+
+# =============================================================================
+# 1. PYTHON GENERATED FILES
+# =============================================================================
+__pycache__/
+*.py[cod]          # .pyc, .pyo, .pyd
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+*.whl
+MANIFEST
+
+# =============================================================================
+# 2. VIRTUAL ENVIRONMENTS
+# =============================================================================
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# =============================================================================
+# 3. ENVIRONMENT FILES AND SECRETS
+# Never commit API keys, broker credentials, tokens, or passwords.
+# Use config.example.yaml for safe placeholders and keep real secrets local.
+# =============================================================================
+.env
+.env.*
+!.env.example        # allow the example file through
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+tokens/
+kite_tokens/
+broker_credentials/
+
+# =============================================================================
+# 4. IDE AND EDITOR FILES
+# =============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# =============================================================================
+# 5. TEST, CACHE AND COVERAGE FILES
+# =============================================================================
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# =============================================================================
+# 6. LOCAL DATABASES AND STORAGE (generated during development)
+# DuckDB files are generated at runtime — they are NOT source files.
+# The source of truth for historical data is the checked-in CSV files.
+# =============================================================================
+*.db
+*.sqlite
+*.sqlite3
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp
+*.parquet           # generated from CSVs at runtime — not source files
+
+# =============================================================================
+# 7. TRADING ENGINE RUNTIME ARTIFACTS
+# All of these are generated at runtime and must not be committed.
+# =============================================================================
+logs/
+*.log
+runtime/
+tmp/
+temp/
+outputs/
+reports/generated/
+backtest_results/
+blotters/generated/
+
+# =============================================================================
+# 8. REDIS AND LOCAL INFRASTRUCTURE
+# =============================================================================
+redis-data/
+redis/
+*.rdb
+dump.rdb
+appendonly.aof
+
+# =============================================================================
+# 9. LOCAL OVERRIDE CONFIG FILES
+# These allow developers to override config.yaml locally without
+# accidentally committing their personal settings.
+# =============================================================================
+*.local.yaml
+*.local.yml
+*.local.json
+local_config.yaml
+local_config.yml
+local_config.json
+
+# =============================================================================
+# 10. OS-SPECIFIC FILES
+# =============================================================================
+Thumbs.db
+Desktop.ini
+.DS_Store
+.AppleDouble
+.LSOverride
+ehthumbs.db
+
+# =============================================================================
+# NOT IGNORED (explicitly safe to commit):
+# - vega/           (source code)
+# - tests/          (test suite)
+# - validation/     (reference comparisons)
+# - dashboard/      (Streamlit app)
+# - scripts/        (utility scripts such as generate_sample_data.py)
+# - data/market/    (deterministic synthetic sample CSVs)
+# - data/macro/     (deterministic synthetic macro CSVs)
+# - README.md
+# - requirements.txt
+# - pytest.ini
+# - config.yaml     (contains only numeric parameters — no secrets)
+# - config.example.yaml
+# - Dockerfile
+# - docker-compose.yml
+# =============================================================================
