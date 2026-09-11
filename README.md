@@ -16,7 +16,8 @@ Redis, FastAPI, and Streamlit run as lightweight companion services via Docker C
 | Phase 1 | Complete | Data foundation: models, CSV/tick loaders, tick aggregation, contracts |
 | Phase 2 | Complete | Storage: Parquet + DuckDB |
 | Phase 3 | Complete | Technical indicators from first principles: EMA, RSI, ATR, OBV |
-| Phase 4–9 | Planned | Macro regime, strategies, risk, broker, backtest, API, dashboard |
+| Phase 4 | Complete | Deterministic macro regime engine, overrides & circuit breaker |
+| Phase 5–9 | Planned | Strategies, risk manager, broker, portfolio, backtest, API |
 
 ---
 
@@ -170,6 +171,80 @@ The engine computes technical indicators from first principles using pure Python
 
 ---
 
+## Macro Regime Engine
+
+The engine features a deterministic, transparent Macro Regime Engine ([`vega.macro.engine`](vega/macro/engine.py)) that classifies the macro environment to adapt strategy parameters and trigger circuit-breaker protections.
+
+### Macro Inputs
+
+The engine consumes three transparent market proxy indicators:
+1. **India VIX** (`india_vix`): Implied volatility of NIFTY options, measuring near-term market fear/complacency.
+2. **NIFTY 200-Day Trend** (`nifty_trend`): Precomputed normalized trend signal representing the NIFTY relationship to its 200-day EMA:
+   $$\text{nifty\_trend} = \frac{\text{NIFTY close} - \text{NIFTY 200-day EMA}}{\text{NIFTY 200-day EMA}}$$
+   - $\text{nifty\_trend} \ge 0 \implies \text{NIFTY is at/above its 200-day EMA}$
+   - $\text{nifty\_trend} < 0 \implies \text{NIFTY is below its 200-day EMA}$
+   *(Note: This is a precomputed input; the engine does NOT calculate a 200-day EMA from the 120 synthetic macro rows).*
+3. **USD/INR** (`usdinr`): Spot currency exchange rate, capturing emerging-market currency stress and foreign capital flight.
+
+### Deterministic Scoring Rules
+
+| Component | Condition | Score | Rationale |
+|---|---|---|---|
+| **India VIX** | VIX < 14.0 | **+2.0** | Low volatility; complacency supports trend continuation |
+| | 14.0 <= VIX <= 20.0 | **0.0** | Normal volatility range |
+| | VIX > 20.0 | **-2.0** | Elevated volatility; heightened crash risk |
+| **NIFTY Trend** | NIFTY >= 200-day EMA | **+1.0** | Price above long-term moving average (structural bull) |
+| | NIFTY < 200-day EMA | **-1.0** | Price below long-term moving average (structural bear) |
+| **USD/INR** | USDINR < 84.0 | **+1.0** | Stable domestic currency; healthy foreign flows |
+| | USDINR >= 84.0 | **-1.0** | Currency depreciation / macro stress |
+
+### Regime Classification
+
+The composite score ranges from **-4.0 to +4.0**:
+- **BULLISH** (`score >= +2.0`): Favorable macro environment.
+- **BEARISH** (`score <= -2.0`): Adverse macro environment.
+- **NEUTRAL** (`otherwise`): Mixed or transitional macro environment.
+
+### Parameter Overrides
+
+The engine adjusts trading risk without mutating global configuration:
+- **BULLISH**: Standard position cap (`atr_position_cap = 5`), standard grid spacing (`atr_grid_multiplier = 1.5`).
+- **NEUTRAL**: Baseline unadjusted parameters (`atr_position_cap = 5`, `atr_grid_multiplier = 1.5`).
+- **BEARISH**: Reduced position cap (`atr_position_cap = 2`) and wider grid spacing (`atr_grid_multiplier = 2.0`) to avoid rapid fills and preserve capital during volatile selloffs.
+
+### Circuit Breaker Decision
+
+The macro engine evaluates `is_circuit_breaker_triggered(snapshot)`:
+- **Condition**: Triggers when `regime == Regime.BEARISH` **AND** `india_vix > circuit_breaker_vix_threshold` (20.0).
+- **Behavior**: Returns `True` to block all new entry orders during tail-risk volatility spikes. (Order cancellation and position flattening are delegated to the Risk Manager in Phase 5).
+
+### Why Rule-Based Rather Than Machine Learning?
+
+1. **Explainability in Production & Audits**: In quant trading, macro regime shifts must be explainable in seconds to risk officers, portfolio managers, and interviewers. Black-box ML models (e.g. Hidden Markov Models, Random Forests) are prone to regime hallucination and overfit on small historical macro datasets.
+2. **Zero Lookahead & Overfitting**: Static, economically grounded thresholds (14/20 VIX, 200-day EMA, USDINR stress level) ensure zero lookahead bias and prevent curve-fitting to the 120-row sample dataset.
+3. **Deterministic State Transitions**: Identical macro inputs and configuration guaranteed to produce bit-identical decisions.
+
+### Worked Example
+
+```text
+Input Snapshot:
+  - India VIX = 22.5      (> 20.0) -> Score = -2.0
+  - NIFTY Trend = -0.015  (< 0.0)  -> Score = -1.0
+  - USD/INR = 82.80       (< 84.0) -> Score = +1.0
+
+Composite Score:
+  Total Score = -2.0 + (-1.0) + 1.0 = -2.0
+
+Classification:
+  Score is <= -2.0  ==> Regime: BEARISH
+
+Decision:
+  - Parameter Overrides: position_cap reduced to 2, grid_multiplier widened to 2.0
+  - Circuit Breaker: Triggered (BEARISH + VIX 22.5 > 20.0) -> Trading blocked
+```
+
+---
+
 ## Configuration
 
 All tunable parameters are in [`config.yaml`](config.yaml).
@@ -212,6 +287,7 @@ pytest tests/test_parquet_store.py -v
 pytest tests/test_duckdb_store.py -v
 pytest tests/test_indicators.py -v
 pytest tests/test_indicator_validation.py -v
+pytest tests/test_macro.py -v
 
 # Run standalone independent cross-validation against pandas-ta
 python validation/validate_indicators.py
@@ -219,3 +295,4 @@ python validation/validate_indicators.py
 
 Tests are grouped by component. All use synthetic data — no CSV files,
 no network access, no external services required.
+

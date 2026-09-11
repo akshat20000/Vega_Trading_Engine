@@ -26,9 +26,14 @@ strategies:
     atr_period: 14
 
 macro:
-  vix_high_threshold: 20.0   # VIX above this → bearish signal
-  vix_low_threshold: 14.0    # VIX below this → bullish signal
-  usdinr_stress_level: 84.0  # USDINR above this → bearish signal
+  vix_high_threshold: 20.0             # VIX above this → -2 (bearish signal)
+  vix_low_threshold: 14.0              # VIX below this → +2 (bullish signal)
+  usdinr_stress_level: 84.0            # USDINR at/above this → -1 (bearish signal)
+  bullish_score_threshold: 2.0         # Score >= this triggers BULLISH regime
+  bearish_score_threshold: -2.0        # Score <= this triggers BEARISH regime
+  bearish_position_cap: 2              # Reduced max lots in BEARISH regime
+  bearish_grid_multiplier: 2.0         # Wider grid spacing in BEARISH regime
+  circuit_breaker_vix_threshold: 20.0  # High-volatility threshold for circuit breaker
 
 walk_forward:
   train_bars: 252             # ~1 trading year (used as training window)

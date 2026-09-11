@@ -52,9 +52,14 @@ class VegaConfig:
     sar_atr_period: int = 14              # ATR period used inside SAR (if needed)
 
     # ── Macro Regime Engine ───────────────────────────────────────────────────
-    vix_high_threshold: float = 20.0      # VIX above this contributes a bearish score
-    vix_low_threshold: float = 14.0       # VIX below this contributes a bullish score
-    usdinr_stress_level: float = 84.0     # USDINR above this contributes a bearish score
+    vix_high_threshold: float = 20.0             # VIX above this contributes -2 (bearish)
+    vix_low_threshold: float = 14.0              # VIX below this contributes +2 (bullish)
+    usdinr_stress_level: float = 84.0            # USDINR at/above this contributes -1 (bearish)
+    bullish_score_threshold: float = 2.0         # Macro score >= this triggers BULLISH regime
+    bearish_score_threshold: float = -2.0        # Macro score <= this triggers BEARISH regime
+    bearish_position_cap: int = 2                # Reduced max lots in BEARISH regime
+    bearish_grid_multiplier: float = 2.0         # Wider grid spacing multiplier in BEARISH regime
+    circuit_breaker_vix_threshold: float = 20.0  # High-volatility VIX threshold for circuit breaker
 
     # ── Rolling Walk-Forward Evaluation ───────────────────────────────────────
     train_bars: int = 252                  # Training window length (~1 year)
@@ -117,6 +122,11 @@ def load_config(path: str | Path = "config.yaml") -> VegaConfig:
         vix_high_threshold  = float(m.get("vix_high_threshold", 20.0)),
         vix_low_threshold   = float(m.get("vix_low_threshold", 14.0)),
         usdinr_stress_level = float(m.get("usdinr_stress_level", 84.0)),
+        bullish_score_threshold = float(m.get("bullish_score_threshold", 2.0)),
+        bearish_score_threshold = float(m.get("bearish_score_threshold", -2.0)),
+        bearish_position_cap    = int(m.get("bearish_position_cap", 2)),
+        bearish_grid_multiplier = float(m.get("bearish_grid_multiplier", 2.0)),
+        circuit_breaker_vix_threshold = float(m.get("circuit_breaker_vix_threshold", 20.0)),
         # Walk-forward
         train_bars = int(wf.get("train_bars", 252)),
         test_bars  = int(wf.get("test_bars", 63)),
