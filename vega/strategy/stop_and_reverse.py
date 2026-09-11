@@ -280,3 +280,8 @@ class StopAndReverseStrategy(BaseStrategy):
             self.state = SARState.LONG
         else:
             self.state = SARState.SHORT
+
+    def get_pyramid_count(self) -> int:
+        """Return 1 if currently in an active position, otherwise 0."""
+        return 1 if self.position != 0 else 0
+

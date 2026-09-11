@@ -104,3 +104,13 @@ class BaseStrategy(ABC):
             orders = self.on_bar(bar, regime=regime)
             all_orders.extend(orders)
         return all_orders
+
+    def get_pyramid_count(self) -> int:
+        """
+        Return the count of active same-direction entry legs (pyramids).
+
+        Default implementation returns 0. Subclasses with pyramiding
+        support should override this to return their active entry count.
+        """
+        return 0
+

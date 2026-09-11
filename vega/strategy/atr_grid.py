@@ -513,3 +513,8 @@ class ATRGridStrategy(BaseStrategy):
             self.net_position += quantity
         else:
             self.net_position -= quantity
+
+    def get_pyramid_count(self) -> int:
+        """Return the current count of active filled pyramid entry legs."""
+        return len(self.active_entries)
+
