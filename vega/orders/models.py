@@ -156,6 +156,8 @@ class Fill:
     timestamp: datetime
     slippage: float = 0.0
     brokerage: float = 0.0
+    symbol: str = ""
+    side: OrderSide | None = None
 
     def __post_init__(self) -> None:
         """Validate fill attributes on construction."""

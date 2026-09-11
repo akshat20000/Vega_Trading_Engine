@@ -260,6 +260,8 @@ class PaperBroker(AbstractBroker):
             timestamp=timestamp,
             slippage=slippage_amt,
             brokerage=brokerage,
+            symbol=order.symbol,
+            side=order.side,
         )
         self._fills.append(fill)
         return fill

@@ -18,7 +18,8 @@ Redis, FastAPI, and Streamlit run as lightweight companion services via Docker C
 | Phase 3 | Complete | Technical indicators from first principles: EMA, RSI, ATR, OBV |
 | Phase 4 | Complete | Deterministic macro regime engine, overrides & circuit breaker |
 | Phase 5A | Complete | Order models, PaperBroker, Idempotency, Risk Manager, Kill Switch |
-| Phase 5B–9 | Planned | Portfolio, strategies, backtest, walk-forward, Redis, API |
+| Phase 5B | Complete | Portfolio & accounting, average-cost basis, mark-to-market, drawdown, Decimal precision |
+| Phase 6–9 | Planned | Strategies, backtest, walk-forward, Redis, API |
 
 ---
 
@@ -329,6 +330,57 @@ The [`RiskManager`](vega/risk/manager.py) acts as a strict pre-order gate answer
 
 ---
 
+## Portfolio & Accounting Layer (Phase 5B)
+
+Phase 5B implements the [`Portfolio`](vega/portfolio/portfolio.py) accounting engine, consuming execution `Fill` objects and maintaining exact cash balances, average cost basis, realized and unrealized P&L, equity, and drawdown.
+
+### 1. Average-Cost Accounting
+
+Positions are tracked per-symbol with weighted average-cost basis:
+- **Opening a position**: Initial entry price equals fill price.
+- **Increasing position**: Weighted average:
+  $$\text{new\_avg\_price} = \frac{(\text{old\_qty} \times \text{old\_avg}) + (\text{new\_qty} \times \text{fill\_price})}{\text{total\_qty}}$$
+- **Reducing position**: Remaining units preserve the existing average entry price unchanged.
+  - **Long exit**: $\text{realized\_pnl} = (\text{exit\_price} - \text{average\_entry\_price}) \times \text{closed\_qty}$
+  - **Short exit**: $\text{realized\_pnl} = (\text{average\_entry\_price} - \text{exit\_price}) \times \text{closed\_qty}$
+- **Reversals (crossing zero)**: First closes the existing position and realizes its P&L, then establishes the residual opposite position at the new fill price.
+- **Complete exits**: Net quantity becomes 0, and average entry price and unrealized P&L reset to zero.
+
+### 2. Transaction Costs & Cash Accounting
+
+Brokerage is deducted deterministically upon fill processing:
+- **BUY**: $\text{cash} \leftarrow \text{cash} - (\text{fill\_price} \times \text{qty} + \text{brokerage})$
+- **SELL**: $\text{cash} \leftarrow \text{cash} + (\text{fill\_price} \times \text{qty} - \text{brokerage})$
+- Guarantee: Cash and equity always reflect net capital after all commissions.
+
+### 3. Mark-to-Market & Valuation
+
+The portfolio provides `mark_to_market(symbol, market_price)`:
+- **Long**: $\text{unrealized\_pnl} = (\text{market\_price} - \text{average\_entry\_price}) \times \text{qty}$
+- **Short**: $\text{unrealized\_pnl} = (\text{average\_entry\_price} - \text{market\_price}) \times \lvert\text{qty}\rvert$
+- **Flat**: $\text{unrealized\_pnl} = 0$
+- **Total Equity**:
+  $$\text{equity} = \text{cash} + \sum (\text{position\_quantity} \times \text{market\_price})$$
+
+### 4. Peak Equity & Drawdown
+
+Tracks portfolio risk metrics dynamically:
+- **Peak Equity**: $\text{peak} = \max(\text{peak}, \text{current\_equity})$
+- **Drawdown**: $\text{drawdown} = \text{peak} - \text{current\_equity}$
+- **Drawdown Percentage**:
+  $$\text{drawdown\_pct} = \frac{\text{drawdown}}{\text{peak}} \times 100$$
+  *(Safely handles zero initial/peak equity).*
+
+### 5. Daily Realized P&L
+
+[`get_daily_realized_pnl(trading_date)`](vega/portfolio/portfolio.py) provides daily realized P&L aggregated by trading date (via `datetime.date` object or ISO string `"YYYY-MM-DD"`). This allows the [`RiskManager`](vega/risk/manager.py) to directly enforce its daily loss limit without mark-to-market noise.
+
+### 6. Monetary Precision Policy
+
+All portfolio accounting values are represented as Python `Decimal` rounded to 2 decimal places (`Decimal("0.01")`) using banker's rounding (`ROUND_HALF_EVEN`). Float prices from `Fill` objects are strictly converted using `Decimal(str(val))` to avoid binary floating-point representation artifacts.
+
+---
+
 ## Configuration
 
 All tunable parameters are in [`config.yaml`](config.yaml).
@@ -375,6 +427,7 @@ pytest tests/test_macro.py -v
 pytest tests/test_orders.py -v
 pytest tests/test_paper_broker.py -v
 pytest tests/test_risk.py -v
+pytest tests/test_portfolio.py -v
 
 # Run standalone independent cross-validation against pandas-ta
 python validation/validate_indicators.py
