@@ -17,7 +17,8 @@ Redis, FastAPI, and Streamlit run as lightweight companion services via Docker C
 | Phase 2 | Complete | Storage: Parquet + DuckDB |
 | Phase 3 | Complete | Technical indicators from first principles: EMA, RSI, ATR, OBV |
 | Phase 4 | Complete | Deterministic macro regime engine, overrides & circuit breaker |
-| Phase 5–9 | Planned | Strategies, risk manager, broker, portfolio, backtest, API |
+| Phase 5A | Complete | Order models, PaperBroker, Idempotency, Risk Manager, Kill Switch |
+| Phase 5B–9 | Planned | Portfolio, strategies, backtest, walk-forward, Redis, API |
 
 ---
 
@@ -241,7 +242,90 @@ Classification:
 Decision:
   - Parameter Overrides: position_cap reduced to 2, grid_multiplier widened to 2.0
   - Circuit Breaker: Triggered (BEARISH + VIX 22.5 > 20.0) -> Trading blocked
+
+---
+
+## Orders, Broker & Risk Management (Phase 5A)
+
+Phase 5A establishes the transactional foundation of the trading engine: strict order lifecycle models, an idempotent paper execution broker, decoupled execution semantics, and a deterministic pre-order risk validation gate.
+
+### 1. Order Lifecycle & State Machine
+
+Orders are modeled in [`vega.orders.models`](vega/orders/models.py) with explicit, non-bypassable state transitions:
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: place_order()
+    PENDING --> FILLED: execute_order() / execute_pending_orders()
+    PENDING --> CANCELLED: cancel_order()
+    PENDING --> REJECTED: risk check or broker rejection
+    FILLED --> [*]
+    CANCELLED --> [*]
+    REJECTED --> [*]
 ```
+
+- **Legal transitions**: `PENDING -> FILLED`, `PENDING -> CANCELLED`, `PENDING -> REJECTED`.
+- **Terminal states**: `FILLED`, `CANCELLED`, and `REJECTED` are terminal. Attempting to transition from any terminal state (e.g. `FILLED -> PENDING`, `CANCELLED -> FILLED`, `FILLED -> FILLED`) raises `InvalidOrderStateTransitionError`.
+- **Construction invariants**: Every `Order` and `Fill` validates required fields at instantiation (non-empty `client_order_id`, `quantity > 0`, `price >= 0.0`, `filled_price > 0`, `brokerage >= 0`).
+
+### 2. Idempotency
+
+Duplicate order submission is a critical failure mode in automated trading. Vega enforces idempotency at the broker boundary via `client_order_id`, distinguishing two distinct cases:
+- **Case A (Identical parameters)**: Submitting an order with an already-tracked `client_order_id` and identical parameters (`symbol`, `side`, `quantity`, `price`) **returns the existing order instance**. No duplicate order is registered, no second position is initiated, and internal broker state is never mutated.
+- **Case B (Conflicting parameters)**: Submitting an order with an already-tracked `client_order_id` but conflicting core parameters raises [`IdempotencyConflictError`](vega/broker/paper.py). The existing order remains completely unchanged and protected.
+
+### 3. Broker Interface & PaperBroker
+
+The broker abstraction ([`vega.broker.base.AbstractBroker`](vega/broker/base.py)) exposes a clean public interface:
+- `place_order(order: Order) -> Order`
+- `cancel_order(client_order_id: str) -> Order`
+- `get_order(client_order_id: str) -> Order | None`
+- `get_all_orders() -> list[Order]` (returns a shallow list copy; callers cannot mutate internal collections)
+- `get_fills(order_id: str | None = None) -> list[Fill]`
+
+The [`PaperBroker`](vega/broker/paper.py) provides deterministic local simulation without network calls:
+- **Order Submission vs. Execution**: `place_order()` enqueues the order as `PENDING`. Strategies do **not** supply fill prices—in real markets, execution environments determine fills.
+- **Execution Mechanism**: Execution is explicitly triggered via `execute_pending_orders(market_price, timestamp)` or `execute_order(client_order_id, market_price, timestamp)`. This clean decoupling enables future backtesting and walk-forward engines to evaluate fills precisely at subsequent bar opens/closes.
+- **Deterministic Slippage**:
+  - **BUY**: $\text{fill\_price} = \text{round}(\text{market\_price} \times (1 + \text{slippage\_pct}), 2)$
+  - **SELL**: $\text{fill\_price} = \text{round}(\text{market\_price} \times (1 - \text{slippage\_pct}), 2)$
+- **Deterministic Brokerage**:
+  - $\text{brokerage} = \text{round}(\text{fill\_price} \times \text{quantity} \times \text{brokerage\_pct}, 2)$
+
+### 4. Risk Manager & Order Semantics
+
+The [`RiskManager`](vega/risk/manager.py) acts as a strict pre-order gate answering **"Is this order allowed?"**:
+- It does **NOT** place or execute orders.
+- It does **NOT** mutate broker state or order collections.
+- It explicitly classifies proposed orders into [`OrderEffect`](vega/risk/manager.py) to eliminate ambiguities:
+  1. `NEW_ENTRY`: Opening a position from flat (`current_position == 0`).
+  2. `SAME_DIRECTION_ENTRY`: Adding to an existing open long or short position. Pyramiding check applies: rejected if $\text{current\_pyramids} \ge \text{max\_pyramids}$.
+  3. `PARTIAL_REDUCTION`: Opposite-side order smaller than open position (e.g. LONG +3, SELL 1 $\rightarrow$ +2). Pyramiding controls **never** block reductions.
+  4. `COMPLETE_REDUCTION`: Opposite-side order exactly matching open position (e.g. LONG +3, SELL 3 $\rightarrow$ 0). Allowed unconditionally under pyramiding.
+  5. `REVERSAL`: Opposite-side order larger than open position (e.g. LONG +3, SELL 5 $\rightarrow$ -2). Closes all existing legs and opens a new opposite position starting at leg 1. Evaluated against position cap and order quantity limits.
+
+| Risk Control | Mechanism | Boundary / Rule | Action on Breach |
+|---|---|---|---|
+| **Kill Switch** | `enable_kill_switch()` / `disable_kill_switch()` | Active status blocks all incoming orders | Rejects proposed order immediately |
+| **Macro Circuit Breaker** | Consumes Macro Regime Engine output | `macro_circuit_breaker == True` | Rejects entry orders during tail-risk macro events |
+| **Daily Loss Limit** | Evaluates realized P&L | `daily_realized_pnl <= -daily_loss_limit` (inclusive) | Rejects proposed order to protect capital |
+| **Max Order Quantity** | Single order limit | `order.quantity <= max_order_quantity` | Rejects oversized orders |
+| **Position Cap** | Resulting net position | $\lvert \text{current\_position} + \Delta \rvert \le \text{position\_cap}$ | Rejects order (supports macro regime overrides) |
+| **Pyramiding Limit** | Evaluates explicit `OrderEffect` | Blocked if `SAME_DIRECTION_ENTRY` and $\text{legs} \ge \text{limit}$ | Blocks adding legs; **never** blocks reductions |
+
+### 5. Numerical Discipline & Precision Policy
+
+- **Indicators & Time Series**: Processed using 64-bit IEEE 754 floating-point (`float64`) for speed and compatibility with NumPy/DuckDB.
+- **Execution Calculations**: Slippage and transaction costs retain full `float64` precision during intermediate steps without premature rounding.
+- **Paise Rounding Semantics**: Final fill prices and brokerage fees are rounded to 2 decimal places using Python's built-in `round(value, 2)`. Python's `round()` implements IEEE 754 round-half-to-even (banker's rounding), preventing cumulative upward or downward bias across thousands of trade simulations.
+- **Monetary Accounting**: Comprehensive monetary precision policies (e.g. Decimal representations for cash balances and ledger tracking) will be established during the Portfolio phase.
+
+### 6. Zerodha KiteBroker Skeleton
+
+[`vega.broker.kite.KiteBroker`](vega/broker/kite.py) provides a safe stub conforming to `AbstractBroker`:
+- Contains **no credentials** and makes **no network calls**.
+- All placement and execution methods raise `NotImplementedError` with descriptive messages.
+- Real broker connectivity is strictly deferred to future live execution phases.
 
 ---
 
@@ -288,6 +372,9 @@ pytest tests/test_duckdb_store.py -v
 pytest tests/test_indicators.py -v
 pytest tests/test_indicator_validation.py -v
 pytest tests/test_macro.py -v
+pytest tests/test_orders.py -v
+pytest tests/test_paper_broker.py -v
+pytest tests/test_risk.py -v
 
 # Run standalone independent cross-validation against pandas-ta
 python validation/validate_indicators.py
