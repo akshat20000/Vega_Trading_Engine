@@ -12,6 +12,9 @@ Exports:
     - TokenProvider, InMemoryTokenProvider: Token management abstractions.
     - APIClient, APIResponse: Resilient broker API client.
     - AuthenticationError, TokenRefreshError, APIResponseError: Auth/API errors.
+    - WebSocketClient, WebSocketState, SequencedTick, SimulatedWebSocketTransport:
+      Market-data WebSocket connection and resynchronization abstractions.
+    - WebSocketError, ConnectionClosedError, ResyncError: WebSocket domain errors.
 """
 
 from vega.broker.auth import (
@@ -28,6 +31,15 @@ from vega.broker.kite import KiteBroker
 from vega.broker.paper import BrokerError, IdempotencyConflictError, PaperBroker
 from vega.broker.rate_limiter import RateLimiter
 from vega.broker.retry import RetryPolicy, retry_with_backoff
+from vega.broker.websocket import (
+    ConnectionClosedError,
+    ResyncError,
+    SequencedTick,
+    SimulatedWebSocketTransport,
+    WebSocketClient,
+    WebSocketError,
+    WebSocketState,
+)
 
 __all__ = [
     "AbstractBroker",
@@ -45,4 +57,11 @@ __all__ = [
     "AuthenticationError",
     "TokenRefreshError",
     "APIResponseError",
+    "WebSocketClient",
+    "WebSocketState",
+    "SequencedTick",
+    "SimulatedWebSocketTransport",
+    "WebSocketError",
+    "ConnectionClosedError",
+    "ResyncError",
 ]
