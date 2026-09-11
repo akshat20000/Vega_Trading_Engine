@@ -89,6 +89,9 @@ class TradeRecord:
     brokerage: float
     slippage: float
     realized_pnl: float
+    signal_price: float | None = None
+    strategy: str = ""
+    reason: str = ""
 
 
 @dataclass
@@ -155,6 +158,15 @@ class BacktestResult:
     trades: list[TradeRecord] = field(default_factory=list)
     orders: list[OrderRecord] = field(default_factory=list)
     rejected_orders: list[tuple[Order, str]] = field(default_factory=list)
+    _blotter: Any = field(default=None, init=False, repr=False)
+
+    @property
+    def blotter(self) -> Any:
+        """Cached TradeBlotter representing executed trades."""
+        if not hasattr(self, "_blotter") or self._blotter is None:
+            from vega.reporting.blotter import TradeBlotter
+            self._blotter = TradeBlotter.from_trades(self.trades)
+        return self._blotter
 
     def summary(self) -> str:
         """Return a formatted text summary of backtest performance."""
@@ -267,6 +279,9 @@ class BacktestEngine:
         rejected_orders: list[tuple[Order, str]] = []
         equity_curve: list[EquityPoint] = []
         order_signal_times: dict[str, datetime] = {}
+        order_signal_prices: dict[str, float | None] = {}
+        order_strategies: dict[str, str] = {}
+        order_reasons: dict[str, str] = {}
 
         n_bars = len(bars)
 
@@ -287,6 +302,13 @@ class BacktestEngine:
                     self.strategy.on_fill(fill)
 
                     sig_time = order_signal_times.get(fill.order_id, bar.timestamp)
+                    sig_price = order_signal_prices.get(fill.order_id)
+                    strat_name = order_strategies.get(
+                        fill.order_id,
+                        getattr(self.strategy, "name", type(self.strategy).__name__),
+                    )
+                    order_reason = order_reasons.get(fill.order_id, "STRATEGY_SIGNAL")
+
                     trade = TradeRecord(
                         order_id=fill.order_id,
                         symbol=fill.symbol,
@@ -298,6 +320,9 @@ class BacktestEngine:
                         brokerage=fill.brokerage,
                         slippage=fill.slippage,
                         realized_pnl=float(realized_pnl),
+                        signal_price=sig_price,
+                        strategy=strat_name,
+                        reason=order_reason,
                     )
                     trades.append(trade)
 
@@ -332,6 +357,13 @@ class BacktestEngine:
 
             for order in candidate_orders:
                 order_signal_times[order.client_order_id] = bar.timestamp
+                order_signal_prices[order.client_order_id] = float(bar.close) if bar.close else None
+                order_strategies[order.client_order_id] = getattr(
+                    self.strategy, "name", type(self.strategy).__name__
+                )
+                order_reasons[order.client_order_id] = getattr(
+                    order, "reason", "STRATEGY_SIGNAL"
+                ) or "STRATEGY_SIGNAL"
 
                 decision = self.risk_manager.validate_order(
                     order=order,
