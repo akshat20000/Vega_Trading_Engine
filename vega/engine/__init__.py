@@ -16,6 +16,12 @@ from vega.engine.backtest import (
     OrderRecord,
     TradeRecord,
 )
+from vega.engine.walk_forward import (
+    WalkForwardEvaluator,
+    WalkForwardResult,
+    WalkForwardWindow,
+    WalkForwardWindowResult,
+)
 
 __all__ = [
     "BacktestEngine",
@@ -23,4 +29,9 @@ __all__ = [
     "EquityPoint",
     "TradeRecord",
     "OrderRecord",
+    "WalkForwardEvaluator",
+    "WalkForwardWindow",
+    "WalkForwardWindowResult",
+    "WalkForwardResult",
 ]
+
