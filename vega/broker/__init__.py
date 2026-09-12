@@ -27,6 +27,7 @@ from vega.broker.auth import (
     TokenRefreshError,
 )
 from vega.broker.base import AbstractBroker
+from vega.broker.factory import create_broker
 from vega.broker.kite import KiteBroker
 from vega.broker.paper import BrokerError, IdempotencyConflictError, PaperBroker
 from vega.broker.rate_limiter import RateLimiter
@@ -47,6 +48,7 @@ __all__ = [
     "BrokerError",
     "IdempotencyConflictError",
     "KiteBroker",
+    "create_broker",
     "RetryPolicy",
     "retry_with_backoff",
     "RateLimiter",

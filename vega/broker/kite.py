@@ -23,9 +23,19 @@ class KiteBroker(AbstractBroker):
     """
 
     def __init__(self, api_key: str | None = None, access_token: str | None = None) -> None:
-        """Initialize safe KiteBroker skeleton without credentials."""
+        """Initialize safe KiteBroker skeleton with configuration."""
         self._api_key = api_key
         self._access_token = access_token
+
+    @property
+    def api_key(self) -> str | None:
+        """Configured Kite API key."""
+        return self._api_key
+
+    @property
+    def access_token(self) -> str | None:
+        """Configured daily Kite access token."""
+        return self._access_token
 
     def place_order(self, order: Order) -> Order:
         """Raise NotImplementedError: Live Zerodha order placement not yet implemented."""

@@ -65,6 +65,13 @@ class VegaConfig:
     train_bars: int = 252                  # Training window length (~1 year)
     test_bars: int = 63                    # Test window length (~1 quarter)
 
+    # ── Operational & Broker Settings ─────────────────────────────────────────
+    broker: str = "paper"                  # "paper" | "kite"
+    kite_api_key: str | None = None        # Zerodha Kite Connect API key
+    kite_api_secret: str | None = None     # Zerodha Kite Connect API secret
+    kite_access_token: str | None = None   # Daily session access token
+    redis_url: str | None = None           # Redis connection URL
+
 
 def load_config(path: str | Path = "config.yaml") -> VegaConfig:
     """
@@ -83,12 +90,14 @@ def load_config(path: str | Path = "config.yaml") -> VegaConfig:
         config = load_config("config.yaml")
         print(config.initial_capital)  # 1000000.0
     """
+    import os
+
     try:
         with open(path, "r", encoding="utf-8") as f:
             raw: dict = yaml.safe_load(f) or {}
     except FileNotFoundError:
         # No config file — use all dataclass defaults.
-        return VegaConfig()
+        raw = {}
 
     # Extract nested sections, defaulting to empty dict if section is absent.
     b   = raw.get("backtest", {})
@@ -98,6 +107,13 @@ def load_config(path: str | Path = "config.yaml") -> VegaConfig:
     sar = raw.get("strategies", {}).get("stop_and_reverse", {})
     m   = raw.get("macro", {})
     wf  = raw.get("walk_forward", {})
+
+    # Operational settings with environment-variable precedence
+    env_broker = os.getenv("BROKER", raw.get("broker", "paper"))
+    env_kite_key = os.getenv("KITE_API_KEY", raw.get("kite", {}).get("api_key"))
+    env_kite_secret = os.getenv("KITE_API_SECRET", raw.get("kite", {}).get("api_secret"))
+    env_kite_token = os.getenv("KITE_ACCESS_TOKEN", raw.get("kite", {}).get("access_token"))
+    env_redis_url = os.getenv("REDIS_URL", raw.get("redis", {}).get("url"))
 
     return VegaConfig(
         # Backtest
@@ -130,4 +146,10 @@ def load_config(path: str | Path = "config.yaml") -> VegaConfig:
         # Walk-forward
         train_bars = int(wf.get("train_bars", 252)),
         test_bars  = int(wf.get("test_bars", 63)),
+        # Operational
+        broker            = env_broker,
+        kite_api_key      = env_kite_key,
+        kite_api_secret   = env_kite_secret,
+        kite_access_token = env_kite_token,
+        redis_url         = env_redis_url,
     )

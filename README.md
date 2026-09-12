@@ -7,7 +7,7 @@ A deterministic Python trading-engine prototype designed to demonstrate quantita
 ## Verification & Status
 
 ```
-Regression Suite:    401 passed (pytest -q, ~4.8s)
+Regression Suite:    407 passed (pytest -q, ~4.6s)
 Docker Compose:      Redis (healthy) → API (healthy) → Dashboard (healthy)
 Container Status:    3/3 services healthy on private bridge network
 Failover Verified:   Truthful offline diagnostic on API interruption; zero synthetic data
@@ -346,6 +346,40 @@ The execution layer (`vega.execution`) models institutional broker interactions 
   - Sequence numbers track every tick; detects dropped ticks (e.g., sequence 104 followed by 106).
   - Triggers state resynchronization if gaps are identified.
 
+### Broker Selection & Zerodha Kite Integration
+
+Vega abstracts broker interactions behind [`AbstractBroker`](file:///d:/vega/vega/broker/base.py) using the [`create_broker()`](file:///d:/vega/vega/broker/factory.py) factory:
+
+```
+                          .env / Environment
+                                  │
+                                  ▼
+                         VegaConfig (Central)
+                                  │
+                 ┌────────────────┴────────────────┐
+                 ▼                                 ▼
+          BROKER="paper"                    BROKER="kite"
+                 │                                 │
+                 ▼                                 ▼
+            PaperBroker                       KiteBroker
+       (Deterministic / Safe)          (Requires API Credentials)
+                 │                                 │
+                 └────────────────┬────────────────┘
+                                  ▼
+                           AbstractBroker
+                                  │
+                                  ▼
+                            Trading Engine
+```
+
+#### Critical Testing & Infrastructure Distinction
+
+| Dimension | Implementation Details |
+| :--- | :--- |
+| **Implemented** | Kite-compatible broker abstraction (`AbstractBroker`), `KiteBroker` adapter structure, and centralized `create_broker()` factory. |
+| **Tested** | Broker behavior is thoroughly tested using deterministic offline transports; authentication, 401 retry, rate limiting, and WebSocket sequence resynchronization are validated with zero external network dependencies. |
+| **Not Tested Against Live Infrastructure** | Zerodha Kite Connect does **not** provide a sandbox environment; live API calls execute against real capital. Consequently, live Kite execution is not enabled by default (`BROKER=paper`). Real credentials must be supplied via `.env` if explicitly activated. |
+
 ---
 
 ## 10. Backtesting Engine
@@ -576,16 +610,19 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\Activate.ps1
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Generate sample market data
+# 4. Configure environment (optional overrides for broker / redis)
+cp .env.example .env
+
+# 5. Generate sample market data
 python scripts/generate_sample_data.py
 
-# 5. Run test suite
+# 6. Run test suite
 pytest -q
 
-# 6. Launch FastAPI backend
+# 7. Launch FastAPI backend
 uvicorn vega.api.app:app --port 8000 --reload
 
-# 7. Launch Streamlit dashboard (in a separate terminal)
+# 8. Launch Streamlit dashboard (in a separate terminal)
 streamlit run vega/dashboard/app.py --server.port 8501
 ```
 
@@ -624,8 +661,8 @@ docker compose down
 
 To maintain institutional credibility, the boundaries of this prototype are explicitly declared:
 
-1. **Paper Broker Only**: The engine executes against simulated order books and synthetic fill models; it is not currently routed to live exchange trading capital.
-2. **Kite Adapter Interface**: The Zerodha KiteConnect client demonstrates authentication, token refresh, and request signing, but is not connected to active production API keys.
+1. **Paper Broker by Default**: The engine executes against deterministic in-memory simulation (`BROKER=paper`); real-money order execution is disabled by default.
+2. **Zerodha Kite Sandbox Absence**: Zerodha does **not** provide a public sandbox or simulated trading environment for Kite Connect; all live calls execute against real brokerage capital. Consequently, Vega provides an adapter-ready client architecture verified against offline deterministic transports rather than risking real capital.
 3. **Simulated WebSocket Feed**: Live market data streams are generated via a high-throughput deterministic tick simulator rather than an active exchange multicast line.
 4. **Static Contract Master**: Contract specifications and holiday lists are loaded from configuration files rather than dynamic daily exchange master download files.
 5. **Simplified Margin Model**: Margin requirements are calculated using fixed leverage multiples rather than the full exchange SPAN + Exposure multi-tier margining system.

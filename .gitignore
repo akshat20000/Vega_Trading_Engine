@@ -35,7 +35,8 @@ ENV/
 # =============================================================================
 .env
 .env.*
-!.env.example        # allow the example file through
+# allow the example file through
+!.env.example
 *.pem
 *.key
 *.p12
