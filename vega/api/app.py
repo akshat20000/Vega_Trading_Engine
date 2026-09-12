@@ -271,5 +271,20 @@ def create_app(
     return app
 
 
+def get_default_cache() -> RedisStateCache:
+    """Instantiate RedisStateCache from environment variables with safe in-memory fallback."""
+    import os
+
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url and os.getenv("REDIS_HOST"):
+        host = os.getenv("REDIS_HOST", "localhost")
+        port = os.getenv("REDIS_PORT", "6379")
+        redis_url = f"redis://{host}:{port}/0"
+
+    if redis_url:
+        return RedisStateCache.from_url(redis_url, fail_silent=True)
+    return RedisStateCache.create_in_memory()
+
+
 # Default module-level application instance for 'uvicorn vega.api.app:app'
-app = create_app()
+app = create_app(cache=get_default_cache())
