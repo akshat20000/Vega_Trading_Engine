@@ -78,6 +78,32 @@ Rather than relying on monolithic black-box trading frameworks (e.g., Backtrader
 
 ## 3. System Architecture
 
+![Vega Quant Trading Engine Architecture](docs/architecture.png)
+
+### The Authoritative Source of Truth
+A critical architectural invariant in Vega is that **in-memory domain state is authoritative**. Redis and downstream HTTP surfaces are strictly non-authoritative read optimizations:
+
+```
+                         SOURCE OF TRUTH
+
+                     Market / Execution State
+                                │
+                                ▼
+              Domain Portfolio / Risk / Broker State
+                    (Authoritative In-Memory)
+                                │
+        ┌───────────────────────┼───────────────────────┐
+        ▼                       ▼                       ▼
+   Redis Cache            Trade Blotter           FastAPI REST
+(Read Model Only)        (Observability)       (Read-Only Access)
+                                                        │
+                                                        ▼
+                                                    Streamlit
+                                               (Presentation Only)
+```
+
+> **System Invariant**: If Redis or the FastAPI service experiences latency, network partitions, or process termination, the core trading engine, risk checks, and portfolio P&L continue unaffected.
+
 ### High-Level Domain Architecture
 
 ```
