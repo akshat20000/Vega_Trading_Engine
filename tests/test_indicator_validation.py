@@ -18,7 +18,14 @@ from validation.validate_indicators import (
     validate_ema,
     validate_obv,
     validate_rsi,
+    ta,
 )
+
+if ta is None:
+    pytest.skip(
+        "pandas-ta reference library not installed; skipping optional cross-validation",
+        allow_module_level=True,
+    )
 
 
 @pytest.fixture(scope="module")

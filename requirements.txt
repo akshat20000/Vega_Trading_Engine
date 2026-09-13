@@ -18,7 +18,9 @@ requests>=2.31.0       # HTTP client for dashboard
 # ── Testing ───────────────────────────────────────────────────────────────────
 pytest>=8.0.0
 pytest-cov>=4.0.0      # Code coverage reports
+httpx>=0.25.0          # HTTP client for TestClient
+httpx2>=2.0.0          # Starlette 1.6+ TestClient dependency
+pandas-ta-classic>=0.3.0 # Indicator cross-validation reference library
 
 # ── Validation only (not used by core engine) ─────────────────────────────────
-# pandas-ta>=0.3.14b   # Indicator cross-check reference — uncomment when needed
 # vectorbt>=0.26.1     # Backtest cross-check reference — uncomment when needed

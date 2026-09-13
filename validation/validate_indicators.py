@@ -54,7 +54,10 @@ import pandas as pd
 try:
     import pandas_ta as ta
 except ImportError:
-    import pandas_ta_classic as ta
+    try:
+        import pandas_ta_classic as ta
+    except ImportError:
+        ta = None
 
 import sys
 from pathlib import Path
@@ -255,6 +258,11 @@ def validate_atr(bars: list[Bar], period: int = 14) -> ValidationResult:
 
 def run_all_validations() -> list[ValidationResult]:
     """Run all indicator validations and display results in a structured report."""
+    if ta is None:
+        raise ImportError(
+            "Neither 'pandas-ta' nor 'pandas-ta-classic' is installed. "
+            "Install pandas-ta-classic via: pip install pandas-ta-classic"
+        )
     bars = generate_synthetic_bars(num_bars=150, seed=42)
     results = [
         validate_ema(bars, period=20),
@@ -270,6 +278,11 @@ def main() -> None:
     print(" VEGA QUANT TRADING ENGINE — INDICATOR CROSS-VALIDATION REPORT")
     print(" Reference library: pandas-ta (independent verification)")
     print("=" * 80)
+
+    if ta is None:
+        print("\n[ERROR] Neither 'pandas-ta' nor 'pandas-ta-classic' is installed.")
+        print("Install reference library via: pip install pandas-ta-classic\n")
+        return
 
     results = run_all_validations()
     all_passed = True
